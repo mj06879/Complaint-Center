@@ -74,19 +74,20 @@ class Heap():
 #extracting data from excel files assigning priority and inserting into pairing heap
 class Query():
     def __init__(self) -> None:
-        # self.Data={"MUNEEB": ("1000", "Karachi","Sindh", 124303, 127, "4/24/2021", 13), "SAJEEL":("1001", "Multan", "Punjab", 98214, 1442,"08/02/2020", 17 ), "NAJEEB": ("1002", "Islamabad", "KPK", 9218, 124, "03/19/2022", 4), "JAIPAL":("1003", "Lahore", "Punjab", 192091, 899, "06/10/2020", 9)}
-        self.flag = True
+
         self.Data = {}
         self.Queries=[]
         self.h1 = Heap()
         self.deleted_index = []     # To store indexes of Queries being resolved & getting deleted from Heap. 
-        #function extracts data from the excel file
-        self.lowest_Frequency = float('inf')
+
+        self.lowest_Frequency = float('inf')    # initially setting up at +ve infinity. 
         self.lowest_spent = float('inf')
-        self.priority_dict = {}  # (keys: priority, vlaue: Index)
-        self.type_severity = {"Personnel": 0.5, "Communication":0.75, "Delivery": 1, "Product/Service": 2,
-        "Website": 5}
+        self.priority_dict = {}  # (keys: priority, vlaue: Index)    # The recorde of priorities and the index of queries... For checking that not getting the same priority agian. 
         
+        self.type_severity = {"Personnel": 0.5, "Communication":0.75, "Delivery": 1, "Product/Service": 2,
+        "Website": 5}         # {Type: Severity factor.}
+        
+        # Key words in complaints ... [0, 1, ... , n]  --> index number tells the severity.
         self.key_words_lst =  ["save", "cheap", "cheaply", "noisy", "noise", "sick", "suck", "throw", "threw",
         "disappoinent", "disappointing","disappointed", "irritating", "quality", "equipment","durable", "poor",
         "poorly", "risk", "missing", "fragile", "drastically", "problem", "problems", "waste", "wasted", "regret", "frustrating",
@@ -116,25 +117,34 @@ class Query():
                         now = datetime.now()
                         now = now.strftime("%d/%m/%Y, %H:%M:%S")
                         row[7] = now
-
+                    
+                    # We are taking lowest frequency and lowest spent out of those Users that are in complaits. 
                     if int((self.Data[row[1]])[3]) < self.lowest_spent:   # Data[row[1]] = [Client_ID, City, Region, Total_Amount_Spent, Frequency, Password] 
-                        self.lowest_spent = int((self.Data[row[1]])[3])
+                        self.lowest_spent = int((self.Data[row[1]])[3])   # 
                     if int((self.Data[row[1]])[4]) < self.lowest_Frequency:
                         self.lowest_Frequency = int((self.Data[row[1]])[4])    
                 count +=1 
 
-        self.Heading= self.Queries.pop(0)
+        self.Heading= self.Queries.pop(0)        
+
+
+        # print(self.Heading)
+        # print()
+        # print(self.Queries)
+        # print("lowest_frequency: ", self.lowest_Frequency)
+        # print("lowest_spent: ", self.lowest_spent)
 
         self.ranking()
 
-    def ranking(self)->None:
+    def ranking(self)->None:                              # Ranking all Complaints 
         count=0
+
         for query in self.Queries:
             priority = self.Ranking_helper(query, count)  # need to figure out way to determine this -->helper function (ranking_helper)
             self.h1.insert(priority,count)  
             count+=1
         
-    def Ranking_helper(self, query, index)->float:   #still have to fix
+    def Ranking_helper(self, query, index)->float:       # Returns the priority of every query 
 
         spent_P = self.Spent_priority(int((self.Data[query[1]])[3]))
         freq_P = self.Freq_priority(int((self.Data[query[1]])[4]))
@@ -142,36 +152,33 @@ class Query():
         factor_P = self.factor(query[7])
         no_of_days_P = self.No_of_days(query[4], query[7])
         
-        # Priority = ((spent_P * freq_P * crit_P))/no_of_days_P * (factor_P/(index+1))
-        Priority = ((spent_P * freq_P * crit_P))/no_of_days_P * (factor_P)
+        Priority = (spent_P * freq_P * crit_P * factor_P)/no_of_days_P          # all Relative prioties in Main priority formula.
 
         while Priority in self.priority_dict.keys():
-
-            Priority += 1            # Unique Prioritiy 
+            Priority += 1                                  # when get same priority ... +1 by inspiration of linear probing 
         
-        self.priority_dict[Priority] = index
+        self.priority_dict[Priority] = index               # Adding the new priority in priority dictionary. 
         return Priority
 
-    def Freq_priority(self, freq) ->float:
+    def Freq_priority(self, freq) ->float:                 # Taking out the ratio with Lowest frequency.
         return (freq/self.lowest_Frequency)
     
     def Spent_priority(self, spent) -> float:
-        return (spent/self.lowest_spent) 
+        return (spent/self.lowest_spent)                   #  # Taking out the ratio with Lowest Spent.
 
-
-    def No_of_days(self, last_purchased, Initial_time) ->float:
-        time = (self.Time_format(last_purchased, Initial_time))//60 + 1
+    def No_of_days(self, last_purchased, Initial_time) ->float:     
+        time = (self.Time_format(last_purchased, Initial_time))//60 + 1       # +1 for not getting zero ... bcz in main function it's in division ..and on NO difference --> /1 , No effect on Main priority function.            
         return time
 
-    def factor(self, Initial_time) ->float:
-        now = datetime.now()                    # for Current_time
+    def factor(self, Initial_time) ->float:             # When a Complaint has been Registered. priority relatively increases with increase in Registerd Time and Current Time 
+        now = datetime.now()                  
         now = now.strftime("%d/%m/%Y, %H:%M:%S")
-        time = (self.Time_format(Initial_time, now) + 1)
-        time = time*100
-            
+        time = (self.Time_format(Initial_time, now) + 1) 
+        time = time*100                                 # Just to show relative differnce at a sudden ... we multiplied by 100
+
         return time
 
-    def Critical_keys(self, review, Type):
+    def Critical_keys(self, review, Type):              # Return the relative priority according to Severity of type of keywords. 
         priority = 0
         count = 1
         review = review.split(" ")
@@ -182,10 +189,8 @@ class Query():
 
         priority = (priority/count) * self.type_severity[Type]
         return priority
-                
-    def Time_format(self, T_1, T_2) ->float:            
-        # T_1 = "03/04/2019, 09:53:38"        # day/month/year , hour/min/sec
-        # T_2 = "03/06/2019, 10:50:34"        # T_2 > T_1
+                 
+    def Time_format(self, T_1, T_2) ->float:            # A helping function for calculating time differnce in minutes
 
         Time_1 = T_1.split(", ")
         Time_1_date = Time_1[0].split("/")
@@ -201,14 +206,14 @@ class Query():
         total_mins = c.total_seconds()/60
         return((total_mins))
 
-    def Get_Max_Value(self):
+    def Get_Max_Value(self):                # return the highest prioity number. 
         return self.h1.find_max_val()
 
-    def Get_Max_Index(self):
+    def Get_Max_Index(self):                # returns the index of query on highest priority. 
         a = self.h1.find_max_index()
         return (a)
 
-    def Top_Query(self):
+    def Top_Query(self):                    # returns the Compliant on top of Heap, means the complaint of highest priority. 
         ind = self.Get_Max_Index()
         query  = self.Queries[ind]
         user_name = query[1]
@@ -216,11 +221,10 @@ class Query():
         Result  = str(user_name) + ": " + str(Complaint)
         return Result
 
-    def Deletion(self):
+    def Deletion(self):                     # Deletes the Top Complaint from heap. 
         ind = self.Get_Max_Index()
         self.deleted_index.append(ind)
         self.h1.delete_max()
-        self.flag = True
 
     def Button_for_Deletion(self):
         self.Deletion()
@@ -237,7 +241,7 @@ class Query():
             original_entry= self.Queries[self.h1.find_max_index()]
             return (original_entry[1]+": " +original_entry[8])
 
-    def Recreate_heap(self):
+    def Recreate_heap(self):                    # Recreate the heap ...
         self.deleted_index.sort()
         for i in reversed(self.deleted_index):
             self.Queries.pop(i)
@@ -249,20 +253,20 @@ class Query():
             check = self.h1.delete_max()
             if check == False:
                 is_empty = True
-        
-                        # Again ranking and Recreating Heap ... if any insertion Happens.
-        
+                
         priority_list = list(self.priority_dict.keys())
         priority_list.sort()
+
         lowest_priority = priority_list[0]
         highest_priority = priority_list[len(priority_list)-1]
-        average_priority = (highest_priority+lowest_priority)//2
+        average_priority = (highest_priority+lowest_priority)//2           # Taking out the average priority in the Heap so on Recreation ... priority will releative change.
         count=0
         priority_list = list(self.priority_dict.keys())
         indexes_list = list(self.priority_dict.values())
-        self.priority_dict = {}
+
+        self.priority_dict = {}                                     # Heap is empyt so priority_dict is empty ..and new generated priorities will now be inserted. 
         for query in self.Queries:
-            priority = self.New_Priority_generator(query, count, priority_list, indexes_list, average_priority)  # need to figure out way to determine this -->helper function (ranking_helper)
+            priority = self.New_Priority_generator(query, count, priority_list, indexes_list, average_priority) 
             while priority in self.priority_dict:
                 priority += 1
             self.priority_dict[priority] = count
@@ -270,7 +274,7 @@ class Query():
             count+=1
 
     #Inserting new Query given by User  
-    def New_Priority_generator(self, query, count, priority_list, indexes_list, average_priority):
+    def New_Priority_generator(self, query, count, priority_list, indexes_list, average_priority):   # Generates the new relative priority. 
         i = indexes_list.index(count)
         old_priority = priority_list[i]
         if old_priority > average_priority:
@@ -280,7 +284,7 @@ class Query():
         return new_priority
          
 
-    def Insertion(self, Amount, ProductID, Review, choice_of_complaint, Username, Purchase_Date):
+    def Insertion(self, Amount, ProductID, Review, choice_of_complaint, Username, Purchase_Date):    # Insertion in Queries by User
         #appending Queries
         ComplaintID=random.randint(10000, 100000)
         now = datetime.now()
@@ -299,7 +303,7 @@ class Query():
     def Button_for_Recreation(self):
         self.Recreate_heap()
 
-    def Update_CSV(self, clicked):
+    def Update_CSV(self, clicked):    
         Nested_Data_User = [["Client_ID", "Username", "City", "Region", "Total Amount Spent", "Frequency of Purchase", "Password"]]
         for key, value in self.Data.items():
             temp = [value[0], key, value[1], value[2], value[3], value[4], value[5]]
@@ -401,6 +405,14 @@ class Interface():
         userWindow.geometry("700x500")
         Label(userWindow,text ="This is the User's view").pack()
         #insert backgorund here
+        # image = Image.open("user_interface.png")
+        # copy_of_image = image.copy()
+        # image = copy_of_image.resize((800, 500))
+        # photo = ImageTk.PhotoImage(image)
+        # label = ttk.Label(userWindow, image = photo)
+        # label.bind('<Configure>')
+        # label.pack(fill=BOTH, expand = YES)
+
         image = Image.open("user_interface.png")
         copy_of_image = image.copy()
         image = copy_of_image.resize((700, 500))
@@ -454,7 +466,6 @@ class Interface():
         #buttons
         self.Validate_User_Entry = partial(self.Validate_User_Entry, Amount, ProductID, Review, Purchase_Date)
         Submit=tk.Button (userWindow, text="Submit", font=('Arial semibold', 12),fg="darkblue",  compound=LEFT,relief=RAISED, command=self.Validate_User_Entry).place(x=100,y=400) 
-
 
         userWindow.mainloop()
     #Validating User Entries for Complaint Registration
@@ -510,6 +521,7 @@ class Interface():
         Heading= Label(adminWindow, text="Top Complaint", font = ("Times New Roman",18),fg="red").place(x=300, y=50)
         self.box=Text(adminWindow,width=80,height=15)
         self.box.place(x=20,y=100)
+
         self.box.insert("end", self.q1.Top_Query())
 
         #buttons
@@ -519,7 +531,6 @@ class Interface():
         
         Resolve=tk.Button (adminWindow, text="Resolve", font=('Arial semibold', 12),fg="green",  compound=LEFT,relief=RAISED)
         Resolve.place(x=320,y=360)
-        # Resolve.bind('<Button-1>',self.q1.Button_for_Deletion)
         Resolve.bind('<Button-1>',self.Repeat_For_Top_Query)
 
         Save=tk.Button (adminWindow, text="Save", font=('Arial semibold', 12),fg="green",  compound=LEFT,relief=RAISED)
@@ -529,14 +540,15 @@ class Interface():
         adminWindow.mainloop()
     
 
-    def For_Recreation_show(self, clicked):
+    def For_Recreation_show(self, clicked):      # Recreate heap ... and then show up the new Top new Complaint.
         self.q1.Button_for_Recreation()
         self.box.delete("1.0", "end")
         self.box.insert("end", self.q1.Top_Query())
 
-    def Repeat_For_Top_Query(self, clicked):
+    def Repeat_For_Top_Query(self, clicked):     # Delete the Top Query and show the new Top Complaint.
         self.q1.Button_for_Deletion()
         self.box.delete("1.0", "end")
         self.box.insert("end", self.q1.Top_Query())
+
 
 I1=Interface()
